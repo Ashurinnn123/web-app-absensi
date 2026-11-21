@@ -412,10 +412,11 @@ function renderDaftarPekerja() {
     const masterIdx = masterPekerja.findIndex(item => item.id_pekerja === p.id_pekerja);
     const isUnselected = p.status_hadir === null;
     const isAbsent = p.status_hadir === 0;
+    const isDouble = p.status_hadir === 2;
 
     const badgeSudahAbsen = p.sudah_terkirim
-      ? `<div style="margin-top:3px;"><span style="background:#dcfce7; color:#15803d; border:1px solid #86efac; border-radius:4px; padding:2px 7px; font-size:11px; font-weight:700; display:inline-flex; align-items:center; gap:3px;">✓ Sudah Absen (${esc(p.proyek_terkirim || "Terkirim")}${p.jam_terkirim ? ` ${esc(p.jam_terkirim)}` : ""})</span></div>`
-      : "";
+      ? `<div style="margin-top:3px;"><span style="background:#dcfce7; color:#15803d; border:1px solid #86efac; border-radius:4px; padding:2px 7px; font-size:11px; font-weight:700; display:inline-flex; align-items:center; gap:3px;">✓ Sudah Absen ${p.status_hadir === 2 ? '(2 Kehadiran + Makan)' : ''} (${esc(p.proyek_terkirim || "Terkirim")}${p.jam_terkirim ? ` ${esc(p.jam_terkirim)}` : ""})</span></div>`
+      : (p.status_hadir === 2 ? `<div style="margin-top:3px;"><span style="background:#e0e7ff; color:#3730a3; border:1px solid #c7d2fe; border-radius:4px; padding:2px 7px; font-size:11px; font-weight:700;">★ Lembur >6 Jam (2 Kehadiran + 1 Uang Makan)</span></div>` : "");
 
     const div = document.createElement("div");
     div.className = "worker-item" + (isUnselected ? " unselected" : "");
@@ -433,12 +434,13 @@ function renderDaftarPekerja() {
     <div class="status-group">
       <button type="button" class="status-btn ${p.status_hadir === 1 ? 'active-full' : ''}" onclick="setStatus(${masterIdx}, 1)">Full (1)</button>
       <button type="button" class="status-btn ${p.status_hadir === 0.5 ? 'active-half' : ''}" onclick="setStatus(${masterIdx}, 0.5)">1/2 Hari</button>
+      <button type="button" class="status-btn ${p.status_hadir === 2 ? 'active-double' : ''}" onclick="setStatus(${masterIdx}, 2)" title="Lembur >6 jam: otomatis 2 kehadiran + 1 uang makan">Lembur >6j (2)</button>
       <button type="button" class="status-btn ${p.status_hadir === 0 ? 'active-absent' : ''}" onclick="setStatus(${masterIdx}, 0)">Absen (0)</button>
     </div>
     <div class="extra-inputs">
       <input type="number" min="0" max="12" step="0.5" placeholder="Lembur (jam)" 
         value="${p.jam_lembur > 0 ? p.jam_lembur : ''}" 
-        ${isAbsent ? 'disabled title="Pekerja absen tidak dapat lembur"' : ''} 
+        ${(isAbsent || isDouble) ? 'disabled title="' + (isDouble ? 'Lembur >6 jam sudah masuk ke kehadiran (2) dan tidak dihitung jam lembur' : 'Pekerja absen tidak dapat lembur') + '"' : ''} 
         oninput="ubahLembur(${masterIdx}, this.value)">
       <input type="text" placeholder="Catatan singkat (opsional)" 
         value="${esc(p.catatan)}" 
@@ -452,8 +454,8 @@ function renderDaftarPekerja() {
 function setStatus(index, nilai) {
   onInputChanged();
   masterPekerja[index].status_hadir = nilai;
-  // Jika status diubah jadi Absen (0), otomatis reset lembur ke 0
-  if (nilai === 0) {
+  // Jika status diubah jadi Absen (0) atau Lembur >6j (2), otomatis reset lembur ke 0
+  if (nilai === 0 || nilai === 2) {
     masterPekerja[index].jam_lembur = 0;
   }
   simpanDraftProyek(getNamaProyekAktif());
@@ -463,6 +465,16 @@ function setStatus(index, nilai) {
 function ubahLembur(index, nilai) {
   onInputChanged();
   const angka = parseFloat(nilai);
+  if (!isNaN(angka) && angka > 6) {
+    // Aturan: Jika lembur > 6 jam, otomatis dapat uang makan dan status kehadiran bertambah 1 menjadi 2,
+    // serta jam lembur menjadi kosong / tidak dihitung lembur.
+    masterPekerja[index].status_hadir = 2;
+    masterPekerja[index].jam_lembur = 0;
+    simpanDraftProyek(getNamaProyekAktif());
+    renderDaftarPekerja();
+    tampilkanAlert(`Pekerja "${masterPekerja[index].nama_pekerja}" lembur lebih dari 6 jam (${angka} jam): otomatis dihitung 2 Kehadiran + Uang Makan, dan jam lembur direset.`, "warning");
+    return;
+  }
   masterPekerja[index].jam_lembur = isNaN(angka) ? 0 : Math.max(0, Math.min(12, angka));
   simpanDraftProyek(getNamaProyekAktif());
 }

@@ -352,8 +352,8 @@ function handleKirimAbsensi(payload) {
     return createJsonResponse({ status: "error", message: "Daftar absensi kosong. Minimal pilih 1 pekerja." });
   }
 
-  // Validasi nilai kehadiran dan lembur per pekerja
-  const validStatus = [0, 0.5, 1];
+  // Validasi nilai kehadiran dan lembur per pekerja (0 = Absen, 0.5 = 1/2 Hari, 1 = Full, 2 = Lembur >6 jam)
+  const validStatus = [0, 0.5, 1, 2];
   for (let i = 0; i < daftarAbsensi.length; i++) {
     const item = daftarAbsensi[i];
     const statusHadir = Number(item.status_hadir);
@@ -684,7 +684,7 @@ function perbaruiSemuaFormulaRekap_(sheetRekap) {
   const sep = getFormulaSeparator_(sheetRekap); // ";" untuk locale Indonesia, "," untuk US
   const jumlahPekerja = endRow - startRow + 1;
 
-  // 1. Susun batch formula dinamis untuk setiap baris data pekerja (Kolom B sampai L = 11 kolom)
+  // 1. Susun batch formula dinamis untuk setiap baris data pekerja (Kolom B sampai M = 12 kolom formula)
   const workerFormulas = [];
   for (let r = startRow; r <= endRow; r++) {
     const fNama = `=IFERROR(VLOOKUP(A${r}${sep} Master_Pekerja!$A$5:$G$1000${sep} 2${sep} FALSE)${sep} "")`;
@@ -694,21 +694,33 @@ function perbaruiSemuaFormulaRekap_(sheetRekap) {
     const fUpah = `=IFERROR(VLOOKUP(A${r}${sep} Master_Pekerja!$A$5:$G$1000${sep} 6${sep} FALSE)${sep} 0)`;
     const fLembur = `=IFERROR(VLOOKUP(A${r}${sep} Master_Pekerja!$A$5:$G$1000${sep} 7${sep} FALSE)${sep} 0)`;
 
+    // Kolom H: Total Hari Kerja (kehadiran 2 dari lembur >6 jam otomatis menambah 2 hari kerja)
     const fHariKerja =
       `=IF(A${r}=""${sep} 0${sep} ` +
       `IFERROR(IF(AND($C$3<>""${sep} $E$3<>"")${sep} ` +
       `SUMIFS(Log_Absensi!$H$5:$H$10000${sep} Log_Absensi!$E$5:$E$10000${sep} A${r}${sep} Log_Absensi!$B$5:$B$10000${sep} ">="&$C$3${sep} Log_Absensi!$B$5:$B$10000${sep} "<="&$E$3)${sep} ` +
       `SUMIF(Log_Absensi!$E$5:$E$10000${sep} A${r}${sep} Log_Absensi!$H$5:$H$10000))${sep} 0))`;
 
+    // Kolom I: Total Jam Lembur (lembur normal <= 6 jam)
     const fJamLembur =
       `=IF(A${r}=""${sep} 0${sep} ` +
       `IFERROR(IF(AND($C$3<>""${sep} $E$3<>"")${sep} ` +
       `SUMIFS(Log_Absensi!$I$5:$I$10000${sep} Log_Absensi!$E$5:$E$10000${sep} A${r}${sep} Log_Absensi!$B$5:$B$10000${sep} ">="&$C$3${sep} Log_Absensi!$B$5:$B$10000${sep} "<="&$E$3)${sep} ` +
       `SUMIF(Log_Absensi!$E$5:$E$10000${sep} A${r}${sep} Log_Absensi!$I$5:$I$10000))${sep} 0))`;
 
+    // Kolom J: Total Uang Makan (dihitung dari jumlah hari lembur >6 jam, yaitu Status_Hadir >= 2)
+    const fUangMakan =
+      `=IF(A${r}=""${sep} 0${sep} ` +
+      `IFERROR(IF(AND($C$3<>""${sep} $E$3<>"")${sep} ` +
+      `COUNTIFS(Log_Absensi!$E$5:$E$10000${sep} A${r}${sep} Log_Absensi!$H$5:$H$10000${sep} ">=2"${sep} Log_Absensi!$B$5:$B$10000${sep} ">="&$C$3${sep} Log_Absensi!$B$5:$B$10000${sep} "<="&$E$3)${sep} ` +
+      `COUNTIFS(Log_Absensi!$E$5:$E$10000${sep} A${r}${sep} Log_Absensi!$H$5:$H$10000${sep} ">=2"))${sep} 0))`;
+
+    // Kolom K: Upah Pokok (H * F)
     const fUpahPokok = `=IFERROR(H${r}*F${r}${sep} 0)`;
+    // Kolom L: Upah Lembur (I * G)
     const fUpahLembur = `=IFERROR(I${r}*G${r}${sep} 0)`;
-    const fTotalUpah = `=IFERROR(J${r}+K${r}${sep} 0)`;
+    // Kolom M: Total Upah (K + L)
+    const fTotalUpah = `=IFERROR(K${r}+L${r}${sep} 0)`;
 
     workerFormulas.push([
       fNama,
@@ -719,31 +731,38 @@ function perbaruiSemuaFormulaRekap_(sheetRekap) {
       fLembur,
       fHariKerja,
       fJamLembur,
+      fUangMakan,
       fUpahPokok,
       fUpahLembur,
       fTotalUpah
     ]);
   }
 
-  // Terapkan formula ke seluruh baris data pekerja secara batch
-  sheetRekap.getRange(startRow, 2, jumlahPekerja, 11).setFormulas(workerFormulas);
+  // Pastikan baris header 10 memiliki kolom J = Total_Uang_Makan, K = Upah_Pokok, L = Upah_Lembur, M = Total_Upah
+  try {
+    sheetRekap.getRange(10, 10, 1, 4).setValues([["Total_Uang_Makan", "Upah_Pokok", "Upah_Lembur", "Total_Upah"]]);
+  } catch (hdrErr) {}
 
-  // 2. Perbarui formula di baris GRAND TOTAL (Kolom H sampai L)
+  // Terapkan formula ke seluruh baris data pekerja secara batch (Kolom B sampai M = 12 kolom)
+  sheetRekap.getRange(startRow, 2, jumlahPekerja, 12).setFormulas(workerFormulas);
+
+  // 2. Perbarui formula di baris GRAND TOTAL (Kolom H sampai M = 6 kolom)
   const grandTotalFormulas = [[
-    `=IFERROR(SUM(H${startRow}:H${endRow})${sep} 0)`, // Kolom H
-    `=IFERROR(SUM(I${startRow}:I${endRow})${sep} 0)`, // Kolom I
-    `=IFERROR(SUM(J${startRow}:J${endRow})${sep} 0)`, // Kolom J
-    `=IFERROR(SUM(K${startRow}:K${endRow})${sep} 0)`, // Kolom K
-    `=IFERROR(SUM(L${startRow}:L${endRow})${sep} 0)`  // Kolom L
+    `=IFERROR(SUM(H${startRow}:H${endRow})${sep} 0)`, // Kolom H: Total Hari Kerja
+    `=IFERROR(SUM(I${startRow}:I${endRow})${sep} 0)`, // Kolom I: Total Jam Lembur
+    `=IFERROR(SUM(J${startRow}:J${endRow})${sep} 0)`, // Kolom J: Total Uang Makan
+    `=IFERROR(SUM(K${startRow}:K${endRow})${sep} 0)`, // Kolom K: Upah Pokok
+    `=IFERROR(SUM(L${startRow}:L${endRow})${sep} 0)`, // Kolom L: Upah Lembur
+    `=IFERROR(SUM(M${startRow}:M${endRow})${sep} 0)`  // Kolom M: Total Upah
   ]];
-  sheetRekap.getRange(grandTotalRow, 8, 1, 5).setFormulas(grandTotalFormulas);
+  sheetRekap.getRange(grandTotalRow, 8, 1, 6).setFormulas(grandTotalFormulas);
 
   // 3. Perbarui formula KPI (Baris 7)
   try {
     sheetRekap.getRange("B7").setFormula(`=IFERROR(COUNTIF(E${startRow}:E${endRow}${sep} "Aktif")${sep} 0)`);
     sheetRekap.getRange("D7").setFormula(`=IFERROR(SUM(H${startRow}:H${endRow})${sep} 0)`);
     sheetRekap.getRange("G7").setFormula(`=IFERROR(SUM(I${startRow}:I${endRow})${sep} 0)`);
-    sheetRekap.getRange("J7").setFormula(`=IFERROR(SUM(L${startRow}:L${endRow})${sep} 0)`);
+    sheetRekap.getRange("J7").setFormula(`=IFERROR(SUM(M${startRow}:M${endRow})${sep} 0)`); // Kolom M: Total Estimasi Upah
   } catch (kpiErr) {
     console.warn("Gagal update formula KPI row 7:", kpiErr.message);
   }
@@ -752,9 +771,10 @@ function perbaruiSemuaFormulaRekap_(sheetRekap) {
   try {
     sheetRekap.getRange(startRow, 6, jumlahPekerja, 2).setNumberFormat("#,##0");
     sheetRekap.getRange(startRow, 8, jumlahPekerja, 2).setNumberFormat("#,##0.0");
-    sheetRekap.getRange(startRow, 10, jumlahPekerja, 3).setNumberFormat("#,##0");
+    sheetRekap.getRange(startRow, 10, jumlahPekerja, 1).setNumberFormat("#,##0"); // Kolom J: Uang Makan (integer)
+    sheetRekap.getRange(startRow, 11, jumlahPekerja, 3).setNumberFormat("#,##0"); // Kolom K, L, M: Rupiah
     sheetRekap.getRange(grandTotalRow, 8, 1, 2).setNumberFormat("#,##0.0");
-    sheetRekap.getRange(grandTotalRow, 10, 1, 3).setNumberFormat("#,##0");
+    sheetRekap.getRange(grandTotalRow, 10, 1, 4).setNumberFormat("#,##0");
   } catch (fmtErr) {
     console.warn("Gagal format angka:", fmtErr.message);
   }
@@ -796,15 +816,15 @@ function sisipkanPekerjaKeRekap(ss, newId) {
   // Isi ID pekerja di kolom A baris baru
   sheetRekap.getRange(grandTotalRow, 1).setValue(newId);
 
-  // Format baris baru
-  const newRowRange = sheetRekap.getRange(grandTotalRow, 1, 1, 12);
+  // Format baris baru (13 kolom: A sampai M)
+  const newRowRange = sheetRekap.getRange(grandTotalRow, 1, 1, 13);
   newRowRange.setBorder(true, true, true, true, true, true, "#d1d5db", SpreadsheetApp.BorderStyle.SOLID);
   newRowRange.setFontFamily("Arial");
   newRowRange.setFontSize(10);
   newRowRange.setBackground("#ffffff");
   sheetRekap.getRange(grandTotalRow, 1).setHorizontalAlignment("center");
   sheetRekap.getRange(grandTotalRow, 5).setHorizontalAlignment("center");
-  sheetRekap.getRange(grandTotalRow, 6, 1, 7).setHorizontalAlignment("right");
+  sheetRekap.getRange(grandTotalRow, 6, 1, 8).setHorizontalAlignment("right");
 
   // Perbarui seluruh formula di sheet agar dinamis dan anti-error
   perbaruiSemuaFormulaRekap_(sheetRekap);
@@ -923,14 +943,14 @@ function rebuildRekapUpah() {
 
     sheetRekap.getRange(newRow, 1).setValue(daftarPKR[i]);
 
-    const newRowRange = sheetRekap.getRange(newRow, 1, 1, 12);
+    const newRowRange = sheetRekap.getRange(newRow, 1, 1, 13);
     newRowRange.setBorder(true, true, true, true, true, true, "#d1d5db", SpreadsheetApp.BorderStyle.SOLID);
     newRowRange.setFontFamily("Arial");
     newRowRange.setFontSize(10);
     newRowRange.setBackground("#ffffff");
     sheetRekap.getRange(newRow, 1).setHorizontalAlignment("center");
     sheetRekap.getRange(newRow, 5).setHorizontalAlignment("center");
-    sheetRekap.getRange(newRow, 6, 1, 7).setHorizontalAlignment("right");
+    sheetRekap.getRange(newRow, 6, 1, 8).setHorizontalAlignment("right");
   }
 
   // 5. Terapkan seluruh formula dinamis

@@ -191,8 +191,8 @@ button {
 /* TOMBOL STATUS HADIR */
 .status-group {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 8px;
+  grid-template-columns: 1fr 1fr 1.2fr 1fr;
+  gap: 6px;
   margin-bottom: 10px;
 }
 
@@ -203,7 +203,8 @@ button {
   color: #111827;
   border-radius: 8px;
   font-weight: 700;
-  font-size: 14px;
+  font-size: 13px;
+  padding: 6px 4px;
   transition: all 0.15s ease;
 }
 
@@ -217,6 +218,12 @@ button {
   background: #d97706;
   color: #fff;
   border-color: #d97706;
+}
+
+.status-btn.active-double {
+  background: #4338ca;
+  color: #fff;
+  border-color: #4338ca;
 }
 
 .status-btn.active-absent {
