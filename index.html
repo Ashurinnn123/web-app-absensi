@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Absensi Harian Pekerja Lapangan</title>
+  <!-- Stylesheet Eksternal (Desain Mobile-First & Kontras Tinggi) -->
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <div class="container">
+    <!-- NOTIFIKASI GLOBAL -->
+    <div id="alertBox" class="alert"></div>
+
+    <!-- 1. LAYAR LOGIN PIN PROYEK -->
+    <div id="pinSection" class="card">
+      <h1>Absensi Pekerja Lapangan</h1>
+      <p style="margin-top:0; color:#4b5563;">Masukkan PIN Proyek untuk mulai mengisi absensi harian.</p>
+      <label for="inputPin">PIN Proyek (4-6 Digit)</label>
+      <input type="password" id="inputPin" inputmode="numeric" placeholder="Contoh: 1234" maxlength="6">
+      <button id="btnMasuk" class="btn-primary" onclick="verifikasiPin()">Masuk</button>
+    </div>
+
+    <!-- 2. FORMULIR ABSENSI UTAMA -->
+    <div id="mainSection" class="hidden">
+      <div class="card">
+        <h1>Form Absensi Harian</h1>
+        <p id="tanggalHariIni" style="margin:4px 0 14px 0; font-weight:700; color:var(--primary);"></p>
+
+        <label for="selectProyek">Nama Proyek / Lokasi</label>
+        <select id="selectProyek" onchange="onProyekChanged()"></select>
+        <input type="text" id="inputProyekManual" placeholder="Ketik nama proyek / lokasi baru..."
+          oninput="onInputProyekManualChanged()" style="display:none; margin-top:8px;">
+
+        <label for="inputOperator">Nama Mandor / Operator</label>
+        <input type="text" id="inputOperator" placeholder="Contoh: Budi Santoso" oninput="onInputChanged()">
+      </div>
+
+      <!-- DAFTAR PEKERJA -->
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:8px;">
+          <h2 style="margin:0;">Daftar Pekerja (<span id="jumlahPekerjaTampil">0</span>/<span id="jumlahPekerjaTotal">0</span>)</h2>
+          <button type="button" class="btn-secondary" style="width:auto; min-height:40px; padding:6px 14px; font-size:14px;" onclick="bukaModalTambah()">+ Pekerja Baru</button>
+        </div>
+
+        <!-- FILTER CHECKBOX -->
+        <div class="filter-box">
+          <input type="checkbox" id="checkPekerjaLain" onchange="renderDaftarPekerja()">
+          <label for="checkPekerjaLain">Tampilkan juga pekerja dari proyek lain</label>
+        </div>
+
+        <!-- BANNER STATUS PROYEK TELAH DISUBMIT HARI INI -->
+        <div id="bannerProyekStatus" style="display:none; margin-top:8px;"></div>
+
+        <div id="workerList"></div>
+      </div>
+
+      <!-- FOTO BUKTI KEHADIRAN (LANGSUNG KAMERA) -->
+      <div class="card">
+        <h2>Foto Kelompok Pekerja</h2>
+        <p style="margin:0 0 10px 0; font-size:14px; color:#374151;">Ambil foto langsung di lokasi proyek. Foto otomatis dikompres &le; 300 KB agar hemat kuota.</p>
+        <input type="file" id="inputFoto" accept="image/*" capture="environment" style="display:none;" onchange="prosesFoto(event)">
+        <button type="button" id="btnAmbilFoto" class="btn-secondary" onclick="document.getElementById('inputFoto').click()">Ambil Foto Kamera</button>
+        <img id="previewFoto" alt="Preview Foto Absensi">
+        <p id="infoFoto" style="font-size:13px; font-weight:700; margin:8px 0 0 0;"></p>
+      </div>
+
+      <!-- TOMBOL KIRIM -->
+      <button id="btnKirim" class="btn-success" onclick="kirimAbsensi()">Kirim Absensi Sekarang</button>
+    </div>
+  </div>
+
+  <!-- MODAL TAMBAH PEKERJA BARU -->
+  <div id="modalTambah" class="modal-backdrop">
+    <div class="modal-content">
+      <h2>Tambah Pekerja Baru</h2>
+      <div id="modalAlert" class="modal-alert alert-error"></div>
+      <p id="modalProyekInfo" style="margin:0 0 12px 0; font-size:13px; color:#4b5563; background:#f3f4f6; padding:6px 10px; border-radius:6px;"></p>
+
+      <label for="baruNama">Nama Lengkap</label>
+      <input type="text" id="baruNama" placeholder="Contoh: Slamet Riyadi">
+
+      <label for="baruKeahlian">Keahlian / Jabatan</label>
+      <select id="baruKeahlian">
+        <option value="Tukang Batu">Tukang Batu</option>
+        <option value="Tukang Besi">Tukang Besi</option>
+        <option value="Tukang Kayu">Tukang Kayu</option>
+        <option value="Kenek">Kenek</option>
+        <option value="Mandor">Mandor</option>
+      </select>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
+        <button type="button" class="btn-secondary" onclick="tutupModalTambah()">Batal</button>
+        <button type="button" id="btnSimpanPekerja" class="btn-primary" onclick="simpanPekerjaBaru()">Simpan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Logika Aplikasi Absensi -->
+  <script src="app.js"></script>
+</body>
+
+</html>
