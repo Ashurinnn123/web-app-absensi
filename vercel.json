@@ -1,0 +1,9 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/", "destination": "/daftarhadir/index.html" },
+    { "source": "/style.css", "destination": "/daftarhadir/style.css" },
+    { "source": "/app.js", "destination": "/daftarhadir/app.js" },
+    { "source": "/(.*)", "destination": "/daftarhadir/$1" }
+  ]
+}
